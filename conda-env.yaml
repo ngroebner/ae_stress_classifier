@@ -1,0 +1,24 @@
+name: ae_stress_classifier
+channels:
+  - conda-forge
+  - default
+dependencies:
+  - python=3.8
+  - pip
+  
+  - mlflow
+  
+  
+  - numpy
+  - scipy
+  - pandas
+  - matplotlib
+  - scikit-learn
+  - jupyter
+  - jupyterlab
+  
+  
+  - isort
+  - black
+  - flake8
+  
