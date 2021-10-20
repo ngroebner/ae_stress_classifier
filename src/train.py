@@ -93,8 +93,8 @@ if __name__ == "__main__":
     )
 
     model.fit(
-            x=None,
-            y=None,
+            x=X_train,
+            y=y_train,
             batch_size=args.batch_size,
             epochs=args.epochs,
             verbose=1,
@@ -102,8 +102,30 @@ if __name__ == "__main__":
             validation_split=0.1,
     )
 
+    score = model.evaluate(X_test, y_test)
     # plot results for test and train
+    y_test_predicted = y_scaler.inverse_transform(model.predict(X_test))
+    np.save("artifacts/y_test_predicted.npy", y_test_predicted)
+    y_train_predicted = y_scaler.inverse_transform(model.predict(X_train))
+    np.save("artifacts/y_train_predicted.npy", y_train_predicted)
 
+    f = plt.figure(figsize=(7,7))
+    plt.scatter(X_train, y_train_predicted, c="orange", label="Training set")
+    plt.scatter(X_test, y_test_predicted, c="blue", alpha=0.3, label="Test set")
+    plt.plot([0,130],[0,130], label="Perfect prediction")
+    # regression of test data
+    b, m = np.polyfit(X_test, y_test_predicted, deg=1)
+    x_fit = np.arange(0,130)
+    plt.line(x_fit, m*x_fit+ b)
+    plt.xlim([0,130])
+    plt.ylim([0,130])
+    plt.xlabel("True Differential Stress (MPa)")
+    plt.ylabel("Predicted Differential Stress (MPa)")
+    plt.title(f"Neural Network")
+
+    plt.savefig("artifacts/results.png")
+
+    mlflow.log_artifacts("artifacts/")
     # log all the parameters and artifacts
 
     mlflow.end_run()
