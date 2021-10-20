@@ -2,6 +2,15 @@ import pickle
 import argparse
 import io
 import os
+import logging
+
+logging.basicConfig(
+    filename='logs/training.log',
+    level=logging.INFO,
+    format='%(asctime)s:%(levelname)s:%(message)s',
+    datefmt='%m/%d/%Y %H:%M:%S %Z'
+)
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 
 import mlflow
 import boto3
@@ -12,7 +21,7 @@ import matplotlib.pyplot as plt
 from tensorflow.keras.optimizers import Adam
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
-from .network import make_network
+from network import make_network
 
 
 def load_npy(bucket, key):
@@ -20,7 +29,8 @@ def load_npy(bucket, key):
     obj = boto3.resource("s3").Object(bucket, key)
     with io.BytesIO(obj.get()["Body"].read()) as f:
         f.seek(0)  # rewind the file
-        X, y = np.load(f)
+        x = np.load(f)
+        return x
 
 if __name__ == "__main__":
 
@@ -29,7 +39,7 @@ if __name__ == "__main__":
                         default="waveform-dry",
                         help="Name of mlflow experiment.")
     parser.add_argument("--bucket",
-                        default="seismic_processing",
+                        default="seismic-processing",
                         help="S3 bucket for data")
     parser.add_argument("--data",
                         default="ae_stress_classifier/data/dry_waves.npy",
@@ -58,9 +68,10 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    mlflow.set_tracking_uri(os.environ("MLFLOW_SERVER"))
+    mlflow.set_tracking_uri(os.environ["MLFLOW_SERVER"])
     mlflow.set_experiment(args.expname)
     run = mlflow.start_run()
+    logging.info("MLFlow run started")
 
     # log parameters
     mlflow.log_params({
@@ -77,46 +88,51 @@ if __name__ == "__main__":
     # load training and test data
     # get data from where it's gonna be
     X = load_npy(args.bucket, args.data)
-    y = load_npy(args.bucket, args.labels)
+    y = load_npy(args.bucket, args.target)
+    logging.info("Data and labels loaded")
 
     # scale the data
-    y_scaler = StandardScaler().fit(y)
-    y_scaled = y_scaler.transform(y)
+    y_scaler = StandardScaler().fit(y[:,np.newaxis])
+    y_scaled = y_scaler.transform(y[:,np.newaxis])
 
     X_test, X_train, y_test, y_train = train_test_split(X,y_scaled,train_size=0.7)
 
-    model = make_network(input_shape=(X.shape(1),1), nblocks=args.resblocks)
+    model = make_network(input_shape=(X.shape[1],1), nblocks=args.resblocks)
     model.compile(
         optimizer=opt,
         loss="mse",
         metrics="mse",
     )
+    logging.info("Model created")
 
-    model.fit(
+    history = model.fit(
             x=X_train,
             y=y_train,
             batch_size=args.batch_size,
             epochs=args.epochs,
-            verbose=1,
+            verbose=2,
             callbacks=None,
             validation_split=0.1,
     )
+    logging.info("Model fit")
+    
+    m
 
     score = model.evaluate(X_test, y_test)
     # plot results for test and train
-    y_test_predicted = y_scaler.inverse_transform(model.predict(X_test))
+    y_test_predicted = y_scaler.inverse_transform(model.predict(X_test)).squeeze()
     np.save("artifacts/y_test_predicted.npy", y_test_predicted)
-    y_train_predicted = y_scaler.inverse_transform(model.predict(X_train))
+    y_train_predicted = y_scaler.inverse_transform(model.predict(X_train)).squeeze()
     np.save("artifacts/y_train_predicted.npy", y_train_predicted)
 
     f = plt.figure(figsize=(7,7))
-    plt.scatter(X_train, y_train_predicted, c="orange", label="Training set")
-    plt.scatter(X_test, y_test_predicted, c="blue", alpha=0.3, label="Test set")
+    plt.scatter(y_train.squeeze(), y_train_predicted, c="orange", label="Training set")
+    plt.scatter(y_test.squeeze(), y_test_predicted, c="blue", alpha=0.3, label="Test set")
     plt.plot([0,130],[0,130], label="Perfect prediction")
     # regression of test data
-    b, m = np.polyfit(X_test, y_test_predicted, deg=1)
+    b, m = np.polyfit(y_test.squeeze(), y_test_predicted, deg=1)
     x_fit = np.arange(0,130)
-    plt.line(x_fit, m*x_fit+ b)
+    plt.plot(x_fit, m*x_fit+ b)
     plt.xlim([0,130])
     plt.ylim([0,130])
     plt.xlabel("True Differential Stress (MPa)")
@@ -129,3 +145,6 @@ if __name__ == "__main__":
     # log all the parameters and artifacts
 
     mlflow.end_run()
+    
+    logging.info("Training done")
+    print("Done.")

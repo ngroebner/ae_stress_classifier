@@ -1,5 +1,5 @@
 data/
-
+src/logs/
 *.wav
 *.hdf5
 *.h5
