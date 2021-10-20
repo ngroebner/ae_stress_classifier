@@ -6,7 +6,7 @@ from tensorflow.keras import backend as K
 from tensorflow.keras.layers import add, Activation, LSTM, Conv1D, InputSpec, Input
 from tensorflow.keras.layers import MaxPooling1D, SpatialDropout1D, Bidirectional, BatchNormalization, Flatten, Dense
 from tensorflow.keras.models import Model
-from tensorflow.keras.optimizers import Adam
+
 
 os.environ['KERAS_BACKEND']='tensorflow'
 
@@ -35,7 +35,7 @@ def make_resblock1d(layer, filters=64, kernel_size=11, activation="relu", rate=0
     return x
 
 
-def make_network(input_shape, kernel_size=11):
+def make_network(input_shape, nblocks, kernel_size=11):
     """Create the neural network model.
 
     Parameters:
@@ -59,7 +59,7 @@ def make_network(input_shape, kernel_size=11):
             x = MaxPooling1D()(x)
 
     # add residual blocks
-    for i in range(7):
+    for i in range(nblocks):
         resid = make_resblock1d(x)
         x = add([x, resid])
 

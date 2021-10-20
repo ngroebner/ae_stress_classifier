@@ -1,14 +1,26 @@
 import pickle
 import argparse
+import io
 import os
 
-from tensorflow.keras import Model
-from sklearn.model_selection import train_test_split
-from .network import make_network
 import mlflow
+import boto3
+import numpy as np
 
-def load_npy(x):
-    pass
+import matplotlib.pyplot as plt
+#from tensorflow.keras import Model
+from tensorflow.keras.optimizers import Adam
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from .network import make_network
+
+
+def load_npy(bucket, key):
+
+    obj = boto3.resource("s3").Object(bucket, key)
+    with io.BytesIO(obj.get()["Body"].read()) as f:
+        f.seek(0)  # rewind the file
+        X, y = np.load(f)
 
 if __name__ == "__main__":
 
@@ -35,6 +47,10 @@ if __name__ == "__main__":
                         default=1,
                         type=int,
                         help="number of epochs to train")
+    parser.add_argument("--learning_rate",
+                        default=0.001,
+                        type=float,
+                        help="Learning rate for optimizer")
 
     args = parser.parse_args()
 
@@ -42,18 +58,22 @@ if __name__ == "__main__":
     mlflow.set_experiment(args.experiment)
     run = mlflow.start_run()
 
+    opt = Adam(learning_rate=args.learning_rate)
+
     # load training and test data
     # get data from where it's gonna be
-    X = load_npy(args.data)
-    y = load_npy(args.labels)
+    X = load_npy(args.bucket, args.data)
+    y = load_npy(args.bucket, args.labels)
 
     # scale the data
+    y_scaler = StandardScaler().fit(y)
+    y_scaled = y_scaler.transform(y)
 
-    X_test, X_train, y_test, y_train = train_test_split(X,y,train_size=0.7)
+    X_test, X_train, y_test, y_train = train_test_split(X,y_scaled,train_size=0.7)
 
-    model = make_network()
+    model = make_network(input_shape=(X.shape(1),1), nblocks=args.resblocks)
     model.compile(
-        optimizer="adam",
+        optimizer=opt,
         loss="mse",
         metrics="mse",
     )
@@ -62,11 +82,13 @@ if __name__ == "__main__":
             x=None,
             y=None,
             batch_size=None,
-            epochs=1,
-            verbose=2,
+            epochs=args.epochs,
+            verbose=1,
             callbacks=None,
             validation_split=0.1,
     )
+
+    # plot results for test and train
 
     # log all the parameters and artifacts
 
