@@ -43,6 +43,10 @@ if __name__ == "__main__":
                         default=15,
                         type=int,
                         help="number of residual blocks in network")
+    parser.add_argument("--batch_size",
+                        default=128,
+                        type=int,
+                        help="Mini batch size")
     parser.add_argument("--epochs",
                         default=1,
                         type=int,
@@ -55,8 +59,18 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     mlflow.set_tracking_uri(os.environ("MLFLOW_SERVER"))
-    mlflow.set_experiment(args.experiment)
+    mlflow.set_experiment(args.expname)
     run = mlflow.start_run()
+
+    # log parameters
+    mlflow.log_params({
+        #"data file": args.bucket+"/"+args.data,
+        #"target file":args.bucket+"/"+args.target,
+        "residual blocks": args.resblocks,
+        "epochs": args.epochs,
+        "learning rate": args.learning_rate,
+        "batch size": args.batch_size
+    })
 
     opt = Adam(learning_rate=args.learning_rate)
 
@@ -81,7 +95,7 @@ if __name__ == "__main__":
     model.fit(
             x=None,
             y=None,
-            batch_size=None,
+            batch_size=args.batch_size,
             epochs=args.epochs,
             verbose=1,
             callbacks=None,
